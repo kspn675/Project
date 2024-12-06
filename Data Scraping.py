@@ -6,6 +6,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import time
 import plotly.express as px
+import re
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -13,8 +14,8 @@ load_dotenv()
 # Title and description
 st.title("Reddit Data Scraper 📄")
 st.markdown("""
-Welcome to the **Reddit Data Scraper**! 🚀  
-Fetch and analyze posts from any Reddit user effortlessly.  
+Welcome to the **Reddit Stock Market Data Scraper**! 🚀  
+Fetch and analyze stock market-related discussions and predictions.  
 Fill in the details in the sidebar and start scraping!  
 """)
 
@@ -22,13 +23,23 @@ Fill in the details in the sidebar and start scraping!
 st.sidebar.header("Input Options 🔒")
 st.sidebar.markdown("---")
 
-st.sidebar.markdown("### User Details 📝")
-username = st.sidebar.text_input("Enter the Reddit Username:", help="The username whose posts you want to scrape.")
+st.sidebar.markdown("### Subreddit Details 📝")
+subreddit_name = st.sidebar.text_input("Enter the Stock Market Subreddit:", help="The subreddit related to stock market discussions (e.g., 'stocks', 'investing', etc.)", value="stocks")
+
+# Limit slider to select the number of posts to fetch
+num_posts = st.sidebar.slider(
+    "Select the number of posts to fetch:",
+    min_value=10,  # Minimum number of posts
+    max_value=200,  # Maximum number of posts
+    value=50,  # Default number of posts
+    step=10,  # Step size for each adjustment
+    help="Adjust this slider to select how many posts you want to scrape."
+)
 
 # Scrape button
 if st.sidebar.button("Scrape Reddit Data 🚀", help="Click to start scraping data"):
-    if username:
-        st.write(f"Fetching posts from Reddit user: **{username}**")
+    if subreddit_name:
+        st.write(f"Fetching {num_posts} posts from Reddit subreddit: **{subreddit_name}**")
         try:
             # Initialize Reddit client with provided credentials
             reddit = praw.Reddit(
@@ -37,9 +48,9 @@ if st.sidebar.button("Scrape Reddit Data 🚀", help="Click to start scraping da
                 user_agent="K_ScraperApp/1.0 by Mysterious-List-186"
             )
 
-            # Fetch user submissions
-            user = reddit.redditor(username)
-            submissions = user.submissions.new(limit=100)  # Fetch the latest 100 posts
+            # Fetch posts from the specified subreddit
+            subreddit = reddit.subreddit(subreddit_name)
+            submissions = subreddit.new(limit=num_posts)  # Fetch the selected number of posts
 
             # Collect post data
             posts = []
@@ -47,6 +58,7 @@ if st.sidebar.button("Scrape Reddit Data 🚀", help="Click to start scraping da
                 for submission in submissions:
                     posts.append({
                         "title": submission.title,
+                        "content": submission.selftext,  # Add the content of the post
                         "created_utc": datetime.utcfromtimestamp(submission.created_utc).strftime("%Y-%m-%d %H:%M:%S"),
                         "score": submission.score,
                         "comments": submission.num_comments,
@@ -57,6 +69,15 @@ if st.sidebar.button("Scrape Reddit Data 🚀", help="Click to start scraping da
             # Convert to a DataFrame
             if posts:
                 df = pd.DataFrame(posts)
+
+                # Data Preprocessing: Clean and preprocess the content
+                def clean_text(text):
+                    text = re.sub(r'http\S+|www\S+|https\S+', '', text)  # Remove URLs
+                    text = re.sub(r'[^A-Za-z0-9\s]+', '', text)  # Remove special characters
+                    text = text.strip()  # Remove extra spaces
+                    return text
+
+                df['content_cleaned'] = df['content'].apply(clean_text)
 
                 # Enhanced Visualization Section
                 st.subheader("Data Insights 📊")
@@ -102,7 +123,7 @@ if st.sidebar.button("Scrape Reddit Data 🚀", help="Click to start scraping da
 
                 # Save Data as CSV
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                csv_filename = f"{username}_reddit_data_{timestamp}.csv"
+                csv_filename = f"{subreddit_name}_reddit_data_{timestamp}.csv"
                 csv_filepath = os.path.join("scraped_data", csv_filename)
 
                 os.makedirs("scraped_data", exist_ok=True)
@@ -116,13 +137,13 @@ if st.sidebar.button("Scrape Reddit Data 🚀", help="Click to start scraping da
                     mime="text/csv"
                 )
 
-                st.success(f"✅ Successfully scraped and saved data for user: {username}")
+                st.success(f"✅ Successfully scraped and saved data for subreddit: {subreddit_name}")
             else:
-                st.warning("No posts were found for the specified Reddit user.")
+                st.warning("No posts were found for the specified subreddit.")
         except Exception as e:
             st.error(f"Failed to fetch posts: {e}")
     else:
-        st.warning("Please provide the Reddit Username.")
+        st.warning("Please provide the subreddit name.")
 
 # Footer
 st.markdown("""
